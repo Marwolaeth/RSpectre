@@ -1,0 +1,12 @@
+.Rproj.user
+.Rhistory
+.RData
+.Ruserdata
+*Rproj*
+*.html
+*archive*
+*opcorpora*
+*mystem*
+*emo*
+*tmp*
+*_files
