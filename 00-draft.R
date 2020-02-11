@@ -260,6 +260,15 @@ tictoc::tic()
 cl <- cluster_edge_betweenness(g1)
 tictoc::toc()
 # cl <- cluster_fast_greedy(g1)
+
+save(
+  cl,
+  file = file.path(
+    out_dir,
+    paste(Sys.Date(), 'clustering.RData', sep = '_')
+  )
+)
+# load(get_last_file(out_dir, 'clustering.RData'))
 str(cl, 1)
 cl$membership
 v <- as_data_frame(g, 'vertices') %>% as_tibble()
