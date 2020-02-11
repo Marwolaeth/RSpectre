@@ -126,8 +126,20 @@ strip_html <- function(s) {
 
 str_remove_punctuation <- function(s) {
   require(stringr)
-  str_replace_all(s, '[\\,\\-——«»\\";\\?!\\(\\)]|[\\.|:](?=\\s)', ' ') %>%
+  str_replace_all(s, '[\\,\\-——«»\\";\\?!\\(\\)]|[\\.|:‘’“”](?=\\s)', ' ') %>%
     str_squish()
+}
+
+get_last_file <- function(folder, .pattern = '.xlsx') {
+  sort(
+    list.files(
+      folder,
+      pattern = .pattern,
+      full.names = TRUE
+    ),
+    decreasing = TRUE
+  ) %>%
+    get_element(1)
 }
 
 # Стеммер (лемматизатор) от Яндекса
