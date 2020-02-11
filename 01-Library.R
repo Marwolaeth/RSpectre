@@ -23,7 +23,8 @@ required_packages <- c(
   'udpipe',
   'phrasemachine',
   'RNewsflow',
-  'igraph'
+  'igraph',
+  'XLConnect'
 )
 installed_packages <- installed.packages()
 if (!all(required_packages %in% installed_packages)) {
@@ -130,12 +131,12 @@ str_remove_punctuation <- function(s) {
     str_squish()
 }
 
-get_last_file <- function(folder, .pattern = '.xlsx') {
+get_last_file <- function(folder, .pattern = '.xlsx', fullname = TRUE) {
   sort(
     list.files(
       folder,
       pattern = .pattern,
-      full.names = TRUE
+      full.names = fullname
     ),
     decreasing = TRUE
   ) %>%

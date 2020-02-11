@@ -245,8 +245,8 @@ g = newsflow.compare(
   dtm,
   meta = meta,
   # id.var = 'doc_id',
-  hour.window = c(-48, 144),
-  min.similarity = 0.03,
+  hour.window = c(0, 48),
+  min.similarity = .01,
   measure = 'cosine',
   # margin_attr = FALSE,
   verbose = TRUE
@@ -263,5 +263,136 @@ setequal(names(V(g)), meta$doc_id)
 
 v1 <- v %>%
   mutate(cluster = cl$membership) %>%
-  select(date, header, source, from_sum, to_sum, role, cluster) %>%
+  # select(date, header, source, from_sum, to_sum, role, cluster) %>%
   arrange(cluster)
+
+vlabels <- v1 %>%
+  group_by(cluster) %>%
+  arrange(desc(from_sum)) %>%
+  slice(1) %>%
+  mutate(label = header) %>%
+  ungroup() %>%
+  select(cluster, label)
+vlabels
+
+news <- v %>%
+  mutate(date = ymd_hms(date), cluster = cl$membership) %>%
+  left_join(vlabels) %>%
+  select(doc_id, cluster, label) %>%
+  left_join(meta) %>%
+  add_count(cluster, name = 'n_cl')
+news
+
+save(
+  news,
+  file = file.path(
+    out_dir,
+    paste(Sys.Date(), 'clustered.RData', sep = '_')
+  )
+)
+# load(get_last_file(out_dir, 'clustered.RData'))
+
+library(XLConnect)
+output <- loadWorkbook(
+  file.path(out_dir, get_last_file(in_dir, fullname = FALSE)),
+  create = T
+)
+createSheet(output, 'Упоминания')
+writeWorksheet(
+  output,
+  data = news %>%
+    select(
+      doc_id,
+      date,
+      header,
+      source,
+      ci,
+      source.cat,
+      sentiment,
+      role,
+      cluster,
+      label,
+      n_cl) %>%
+    set_names(
+      'ID сообщения',
+      'Дата',
+      "Заголовок",
+      "Источник",
+      "Индекс цитирования",
+      "Категория источника",
+      "Тональность",
+      "Роль объекта",
+      "Кластер",
+      "Инфоповод",
+      "Размер кластера"
+    ),
+  sheet = 1
+)
+saveWorkbook(
+  output,
+  file = file.path(out_dir, get_last_file(in_dir, fullname = FALSE))
+)
+
+hist(unique(news$n_cl), breaks = 20)
+significant_clusters <- news %>%
+  filter(n_cl >= 4 | str_detect(tolower(label), '(сечин)|(гк )|(судариков)')) %>%
+  arrange(label)
+
+dtm_tags <- dtm[significant_clusters$doc_id, ]
+all(dtm_tags$dimnames$Docs == significant_clusters$doc_id)
+
+tag_terms <- specific_terms(
+  dtm_tags,
+  variable = significant_clusters$label,
+  p= .3,
+  min_occ = 1,
+  n = 100
+) %>%
+  map(as.data.frame) %>%
+  map(tibble::rownames_to_column, 'term') %>%
+  map(as_tibble) %>%
+  bind_rows(.id = 'tag') %>%
+  select(-3) %>%
+  set_names(c('tag', specific_term_vars)) %>%
+  filter(p_level_term == 100 | str_detect(tolower(tag), 'сечин'))
+tag_terms
+
+tag_terms <- tag_terms %>%
+  mutate(ngram = str_count(term, '\\w+')) %>%
+  mutate(tilda = if_else(ngram == 1, 0, ngram * (ngram - 1))) %>%
+  mutate(
+    query = if_else(
+      ngram == 1,
+      term,
+      paste(str_enclose(term, '"'), tilda, sep = '~')
+    )
+  )
+save(
+  tag_terms,
+  file = file.path(
+    out_dir,
+    paste(Sys.Date(), 'specific.RData', sep = '_')
+  )
+)
+# load(get_last_file(out_dir, 'specific.RData'))
+
+queries <- file(
+  file.path(out_dir, paste(Sys.Date(), 'queries.txt', sep = '_')),
+  open = 'w'
+)
+cat('Поисковые запросы:\n\n', file = queries)
+
+tag_terms %>%
+  mutate(label = tag) %>%
+  group_by(tag) %>%
+  arrange(desc(n_term_level)) %>%
+  group_walk(
+    function(tg, ...) {
+      print(tg$label[1])
+      cat(tg$label[1], file = queries, append = TRUE)
+      cat(':\n\n', file = queries, append = TRUE)
+      cat(paste(unique(tg$query), collapse = ', '), file = queries, append = TRUE)
+      cat('\n\n\n', file = queries, append = TRUE)
+    }
+  )
+close.connection(queries)

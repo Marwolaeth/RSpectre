@@ -10,6 +10,7 @@ library(tidytext)
 library(dtplyr)
 library(RNewsflow)
 library(igraph)
+library(R.temis)
 
 weight_terms <- function(
   term.rank,
