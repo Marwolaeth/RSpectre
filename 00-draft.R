@@ -255,9 +255,11 @@ g = newsflow.compare(
 )
 
 g1 <- as.undirected(g, mode = 'collapse')
-cl <- cluster_louvain(g1, weights = 1+E(g1)$weight)
+# cl <- cluster_louvain(g1, weights = 1+E(g1)$weight)
+tictoc::tic()
 cl <- cluster_edge_betweenness(g1)
-cl <- cluster_fast_greedy(g1)
+tictoc::toc()
+# cl <- cluster_fast_greedy(g1)
 str(cl, 1)
 cl$membership
 v <- as_data_frame(g, 'vertices') %>% as_tibble()

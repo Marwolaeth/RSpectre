@@ -90,7 +90,9 @@ txt <- news %>%
     n = 3L,
     n_min = 1L,
     k = 1L,
-    stopwords = union(ru_stopwords, c(tm::stopwords('en'), 'u'))
+    stopwords = union(
+      ru_stopwords, c(tm::stopwords('en'), 'u', c('2019', '2020'))
+    )
   ) %>%
   # Обходим юникод
   filter(!str_detect(term, '^[udbcf0-9\\s]+$')) %>%
@@ -123,6 +125,7 @@ save(
   )
 )
 # load(get_last_file(out_dir, 'tokens.RData'))
+txt <- filter(txt, ngram > 1)
 
 rm(news)
 
@@ -194,13 +197,14 @@ tdd = term_day_dist(dtm1, meta)
 tictoc::toc()
 tdd[sample(1:nrow(tdd), 13),] # show 13 random rows
 tdd[111:124, c(1, 4, 5)]
-tdd[tdd$term %in% c('сечин', 'судариков', 'елена прохоров'), c(1, 4, 7)]
+tdd[tdd$term %in% c('игорь сечин', 'сергей судариков', 'елена прохоров'), c(1, 4, 7)]
 tdd %>%
-  filter(days.entropy.norm > .3) %>%
+  filter(days.entropy.norm > .2) %>%
   arrange(desc(days.entropy.norm)) %>%
-  slice(1:50) %>%
+  slice(1:111) %>%
   View()
 quantile(tdd$days.entropy.norm)
+hist(tdd$days.entropy.norm)
 save(
   tdd,
   file = file.path(
@@ -210,7 +214,7 @@ save(
 )
 # load(get_last_file(out_dir, 'tdd.RData'))
 
-select_terms <- tdd$term[tdd$days.entropy.norm <= .3]
+select_terms <- tdd$term[tdd$days.entropy.norm <= .25]
 dtm <- dtm[,select_terms]
 all(Docs(dtm) == meta$doc_id)
 all(dtm$dimnames$Docs == meta$doc_id)
@@ -230,7 +234,7 @@ g = newsflow.compare(
   dtm,
   meta = meta,
   # id.var = 'doc_id',
-  hour.window = c(0, 48),
+  hour.window = c(0, 72),
   min.similarity = .01,
   measure = 'cosine',
   # margin_attr = FALSE,
