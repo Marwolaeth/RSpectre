@@ -12,6 +12,8 @@ str_count('хуй', '\\w+')
 str_count('хуй пойми', '\\w+')
 str_count('хуй пойми что', '\\w+')
 
+paste(str_enclose(paste('регион', 10:90), '"'), collapse = ', ') %>% cat
+
 ###############################
 current_project <- 'Regions'
 current_dir <- file.path('data', current_project)
@@ -102,7 +104,7 @@ txt <- news %>%
     input = text_lem,
     output = term,
     token = 'skip_ngrams',
-    n = 3L,
+    n = 4L,
     n_min = 1L,
     k = 1L,
     stopwords = union(ru_stopwords, c(tm::stopwords('en'), 'u'))
@@ -134,7 +136,7 @@ save(
   txt,
   file = file.path(
     out_dir,
-    paste(Sys.Date(), 'tokens.RData', sep = '_')
+    paste(Sys.Date(), 'tokens4.RData', sep = '_')
   )
 )
 # load(get_last_file(out_dir, 'tokens.RData'))
@@ -220,7 +222,7 @@ save(
   tdd,
   file = file.path(
     out_dir,
-    paste(Sys.Date(), 'tdd.RData', sep = '_')
+    paste(Sys.Date()+1, 'tdd.RData', sep = '_')
   )
 )
 # load(get_last_file(out_dir, 'tdd.RData'))
@@ -245,7 +247,7 @@ g = newsflow.compare(
   dtm,
   meta = meta,
   # id.var = 'doc_id',
-  hour.window = c(0, 48),
+  hour.window = c(0, 72),
   min.similarity = .01,
   measure = 'cosine',
   # margin_attr = FALSE,
@@ -269,6 +271,8 @@ v1 <- v %>%
 vlabels <- v1 %>%
   group_by(cluster) %>%
   arrange(desc(from_sum)) %>%
+  mutate(nwords = str_count(header, '\\w+')) %>%
+  filter(nwords >= min(4, max(nwords))) %>%
   slice(1) %>%
   mutate(label = header) %>%
   ungroup() %>%
@@ -287,7 +291,7 @@ save(
   news,
   file = file.path(
     out_dir,
-    paste(Sys.Date(), 'clustered.RData', sep = '_')
+    paste(Sys.Date()+1, 'clustered.RData', sep = '_')
   )
 )
 # load(get_last_file(out_dir, 'clustered.RData'))
@@ -335,16 +339,20 @@ saveWorkbook(
 
 hist(unique(news$n_cl), breaks = 20)
 significant_clusters <- news %>%
-  filter(n_cl >= 4 | str_detect(tolower(label), '(сечин)|(гк )|(судариков)')) %>%
+  filter(
+    n_cl >= 4 | str_detect(tolower(label), '(сечин)|(гк )|(судариков)')
+  ) %>%
   arrange(label)
 
 dtm_tags <- dtm[significant_clusters$doc_id, ]
 all(dtm_tags$dimnames$Docs == significant_clusters$doc_id)
+any(is.na(dtm_tags$j))
+any(duplicated(dtm_tags$dimnames$Terms))
 
 tag_terms <- specific_terms(
   dtm_tags,
   variable = significant_clusters$label,
-  p= .3,
+  p = .9,
   min_occ = 1,
   n = 100
 ) %>%
@@ -352,12 +360,13 @@ tag_terms <- specific_terms(
   map(tibble::rownames_to_column, 'term') %>%
   map(as_tibble) %>%
   bind_rows(.id = 'tag') %>%
-  select(-3) %>%
+  # select(-3) %>%
   set_names(c('tag', specific_term_vars)) %>%
   filter(p_level_term == 100 | str_detect(tolower(tag), 'сечин'))
 tag_terms
 
 tag_terms <- tag_terms %>%
+  filter(p_level_term != 0) %>%
   mutate(ngram = str_count(term, '\\w+')) %>%
   mutate(tilda = if_else(ngram == 1, 0, ngram * (ngram - 1))) %>%
   mutate(
@@ -371,13 +380,13 @@ save(
   tag_terms,
   file = file.path(
     out_dir,
-    paste(Sys.Date(), 'specific.RData', sep = '_')
+    paste(Sys.Date()+1, 'specific.RData', sep = '_')
   )
 )
 # load(get_last_file(out_dir, 'specific.RData'))
 
 queries <- file(
-  file.path(out_dir, paste(Sys.Date(), 'queries.txt', sep = '_')),
+  file.path(out_dir, paste(Sys.Date()+1, 'queries.txt', sep = '_')),
   open = 'w'
 )
 cat('Поисковые запросы:\n\n', file = queries)
