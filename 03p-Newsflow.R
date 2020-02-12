@@ -384,7 +384,7 @@ saveWorkbook(
   output,
   file = file.path(out_dir, get_last_file(in_dir, fullname = FALSE))
 )
-
+load(get_last_file(out_dir, 'clustered.RData'))
 hist(unique(news$n_cl), breaks = 20)
 significant_clusters <- news %>%
   semi_join(subjects) %>%
@@ -408,7 +408,7 @@ tag_terms <- specific_terms(
   bind_rows(.id = 'tag') %>%
   select(-10) %>%
   set_names(c('tag', specific_term_vars)) %>%
-  filter(p_level_term >= 99 | str_detect(tolower(tag), 'сечин'))
+  filter(p_level_term >= 100 | str_detect(tolower(tag), 'сечин'))
 tag_terms
 
 tag_terms <- tag_terms %>%
@@ -438,12 +438,12 @@ tags <- tag_terms %>%
     query = paste(query, collapse = ', ')
   ) %>%
   left_join(select(subjects, tag = label, from, period, ci_sum, st, n)) %>%
-  mutate(from = dmy(from)) %>%
+  # mutate(from = dmy(from)) %>%
   arrange(from) %>%
   mutate(st = if_else(st == 1, 'Сечин!', ''))
 tags
 queries <- file(
-  file.path(out_dir, paste(Sys.Date()+1, 'queries.txt', sep = '_')),
+  file.path(out_dir, paste(Sys.Date()+2, 'queries.txt', sep = '_')),
   open = 'w'
 )
 cat('Поисковые запросы:\n\n', file = queries)
