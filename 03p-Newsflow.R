@@ -358,6 +358,7 @@ news_tag <- left_join(news, news_tag) %>%
   summarise(
     st = any(str_detect(tolower(text), 'сечин'))
   )
+
 sum(news_tag$st)
 subjects <- subjects %>%
   left_join(select(news_tag, label, st)) %>%
@@ -390,6 +391,7 @@ significant_clusters <- news %>%
   semi_join(subjects) %>%
   arrange(label)
 
+load(get_last_file(out_dir, 'dtm_sel.RData'))
 dtm_tags <- dtm[significant_clusters$doc_id, ]
 all(dtm_tags$dimnames$Docs == significant_clusters$doc_id)
 any(is.na(dtm_tags$j))
@@ -398,7 +400,7 @@ any(duplicated(dtm_tags$dimnames$Terms))
 tag_terms <- specific_terms(
   dtm_tags,
   variable = significant_clusters$label,
-  p = .05,
+  p = .01,
   min_occ = 1,
   n = 100
 ) %>%
@@ -408,7 +410,7 @@ tag_terms <- specific_terms(
   bind_rows(.id = 'tag') %>%
   select(-10) %>%
   set_names(c('tag', specific_term_vars)) %>%
-  filter(p_level_term >= 100 | str_detect(tolower(tag), 'сечин'))
+  filter(p_level_term >= 100) # | str_detect(tolower(tag), 'сечин'))
 tag_terms
 
 tag_terms <- tag_terms %>%
@@ -426,7 +428,7 @@ save(
   tag_terms,
   file = file.path(
     out_dir,
-    paste(Sys.Date()+1, 'specific.RData', sep = '_')
+    paste(Sys.Date()+2, 'specific.RData', sep = '_')
   )
 )
 # load(get_last_file(out_dir, 'specific.RData'))
@@ -443,7 +445,7 @@ tags <- tag_terms %>%
   mutate(st = if_else(st == 1, 'Сечин!', ''))
 tags
 queries <- file(
-  file.path(out_dir, paste(Sys.Date()+2, 'queries.txt', sep = '_')),
+  file.path(out_dir, paste(Sys.Date()+3, 'queries.txt', sep = '_')),
   open = 'w'
 )
 cat('Поисковые запросы:\n\n', file = queries)
