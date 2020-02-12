@@ -235,18 +235,30 @@ g = newsflow.compare(
   meta = meta,
   # id.var = 'doc_id',
   hour.window = c(0, 72),
-  min.similarity = .01,
+  min.similarity = .08,
   measure = 'cosine',
   # margin_attr = FALSE,
   verbose = TRUE
 )
 
 g1 <- as.undirected(g, mode = 'collapse')
-cl <- cluster_louvain(g1, weights = 1+E(g1)$weight)
-cl <- cluster_edge_betweenness(g1)
-cl <- cluster_fast_greedy(g1)
+# cl <- cluster_louvain(g1, weights = 1+E(g1)$weight)
+tictoc::tic()
+cl <- cluster_edge_betweenness(g1) # 3 min
+tictoc::toc()
+# cl <- cluster_fast_greedy(g1)
+
+save(
+  cl,
+  file = file.path(
+    out_dir,
+    paste(Sys.Date()+1, 'clustering.RData', sep = '_')
+  )
+)
+# load(get_last_file(out_dir, 'clustering.RData'))
 str(cl, 1)
 cl$membership
+summary(cl$membership)
 v <- as_data_frame(g, 'vertices') %>% as_tibble()
 setequal(names(V(g)), meta$doc_id)
 
@@ -258,6 +270,8 @@ v1 <- v %>%
 vlabels <- v1 %>%
   group_by(cluster) %>%
   arrange(desc(from_sum)) %>%
+  mutate(nwords = str_count(header, '\\w+')) %>%
+  filter(nwords >= min(5, max(nwords))) %>%
   slice(1) %>%
   mutate(label = header) %>%
   ungroup() %>%
@@ -276,7 +290,7 @@ save(
   news,
   file = file.path(
     out_dir,
-    paste(Sys.Date(), 'clustered.RData', sep = '_')
+    paste(Sys.Date()+2, 'clustered.RData', sep = '_')
   )
 )
 # load(get_last_file(out_dir, 'clustered.RData'))
@@ -322,18 +336,69 @@ saveWorkbook(
   file = file.path(out_dir, get_last_file(in_dir, fullname = FALSE))
 )
 
+news <- left_join(news, meta)
+subjects <- news %>%
+  group_by(label) %>%
+  summarise(
+    from = min(date),
+    to = max(date),
+    s = any(str_detect(tolower(header), 'сечин')),
+    ci_sum = sum(ci, na.rm = TRUE),
+    n = n()
+  ) %>%
+  arrange(from) %>%
+  mutate_at(vars(from, to), ~ format(., '%d.%m.%Y')) %>%
+  unite('period', from, to, sep = '—', remove = FALSE) %>%
+  filter(n >= 4 | s == TRUE)
+news_tag <- select(news, doc_id, label)
+load(get_last_file(out_dir, 'lem.RData'))
+news_tag <- left_join(news, news_tag) %>%
+  semi_join(subjects) %>%
+  group_by(label) %>%
+  summarise(
+    st = any(str_detect(tolower(text), 'сечин'))
+  )
+sum(news_tag$st)
+subjects <- subjects %>%
+  left_join(select(news_tag, label, st)) %>%
+  select(label, from, to, period, s, st, ci_sum, n) %>%
+  mutate_at(vars(s, st), as.integer) %>%
+  mutate_at(vars(from, to), dmy)
+createSheet(output, 'Инфоповоды')
+writeWorksheet(
+  output,
+  data = subjects %>%
+    set_names(
+      'Инфоповод',
+      "С",
+      "По",
+      'Период',
+      "Сечин в заголовке?",
+      "Сечин в тексте?",
+      "Индекс цитирования",
+      "Количество публикаций"
+    ),
+  sheet = 2
+)
+saveWorkbook(
+  output,
+  file = file.path(out_dir, get_last_file(in_dir, fullname = FALSE))
+)
+
 hist(unique(news$n_cl), breaks = 20)
 significant_clusters <- news %>%
-  filter(n_cl >= 4 | str_detect(tolower(label), '(сечин)|(гк )|(судариков)')) %>%
+  semi_join(subjects) %>%
   arrange(label)
 
 dtm_tags <- dtm[significant_clusters$doc_id, ]
 all(dtm_tags$dimnames$Docs == significant_clusters$doc_id)
+any(is.na(dtm_tags$j))
+any(duplicated(dtm_tags$dimnames$Terms))
 
 tag_terms <- specific_terms(
   dtm_tags,
   variable = significant_clusters$label,
-  p = .3,
+  p = .05,
   min_occ = 1,
   n = 100
 ) %>%
@@ -341,12 +406,13 @@ tag_terms <- specific_terms(
   map(tibble::rownames_to_column, 'term') %>%
   map(as_tibble) %>%
   bind_rows(.id = 'tag') %>%
-  select(-3) %>%
+  select(-10) %>%
   set_names(c('tag', specific_term_vars)) %>%
-  filter(p_level_term == 100 | str_detect(tolower(tag), 'сечин'))
+  filter(p_level_term >= 99 | str_detect(tolower(tag), 'сечин'))
 tag_terms
 
 tag_terms <- tag_terms %>%
+  filter(p_level_term != 0) %>%
   mutate(ngram = str_count(term, '\\w+')) %>%
   mutate(tilda = if_else(ngram == 1, 0, ngram * (ngram - 1))) %>%
   mutate(
@@ -360,27 +426,41 @@ save(
   tag_terms,
   file = file.path(
     out_dir,
-    paste(Sys.Date(), 'specific.RData', sep = '_')
+    paste(Sys.Date()+1, 'specific.RData', sep = '_')
   )
 )
 # load(get_last_file(out_dir, 'specific.RData'))
 
+tags <- tag_terms %>%
+  group_by(tag) %>%
+  arrange(desc(n_term_level)) %>%
+  summarise(
+    query = paste(query, collapse = ', ')
+  ) %>%
+  left_join(select(subjects, tag = label, from, period, ci_sum, st, n)) %>%
+  mutate(from = dmy(from)) %>%
+  arrange(from) %>%
+  mutate(st = if_else(st == 1, 'Сечин!', ''))
+tags
 queries <- file(
-  file.path(out_dir, paste(Sys.Date(), 'queries.txt', sep = '_')),
+  file.path(out_dir, paste(Sys.Date()+1, 'queries.txt', sep = '_')),
   open = 'w'
 )
 cat('Поисковые запросы:\n\n', file = queries)
 
-tag_terms %>%
+tags %>%
   mutate(label = tag) %>%
-  group_by(tag) %>%
-  arrange(desc(n_term_level)) %>%
+  group_by(from, tag) %>%
+  arrange(from) %>%
   group_walk(
     function(tg, ...) {
-      print(tg$label[1])
-      cat(tg$label[1], file = queries, append = TRUE)
-      cat(':\n\n', file = queries, append = TRUE)
-      cat(paste(unique(tg$query), collapse = ', '), file = queries, append = TRUE)
+      cat(
+        str_interp('${tg$label} (${tg$period}, кол-во: ${tg$n} ${tg$st}):'),
+        file = queries,
+        append = TRUE
+      )
+      cat('\n\n', file = queries, append = TRUE)
+      cat(tg$query, file = queries, append = TRUE)
       cat('\n\n\n', file = queries, append = TRUE)
     }
   )

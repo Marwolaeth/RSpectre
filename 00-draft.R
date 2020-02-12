@@ -271,6 +271,7 @@ save(
 # load(get_last_file(out_dir, 'clustering.RData'))
 str(cl, 1)
 cl$membership
+summary(cl$membership)
 v <- as_data_frame(g, 'vertices') %>% as_tibble()
 setequal(names(V(g)), meta$doc_id)
 
