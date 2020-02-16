@@ -15,7 +15,7 @@ str_count('хуй пойми что', '\\w+')
 paste(str_enclose(paste('регион', 10:90), '"'), collapse = ', ') %>% cat
 
 ###############################
-current_project <- 'Regions'
+current_project <- 'TheProject'
 current_dir <- file.path('data', current_project)
 out_dir <- file.path(current_dir, 'output')
 in_dir <- file.path(current_dir, 'input')

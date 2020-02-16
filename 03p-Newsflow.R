@@ -1,4 +1,4 @@
-current_project <- 'Regions'
+current_project <- 'TheProject'
 current_dir <- file.path('data', current_project)
 out_dir <- file.path(current_dir, 'output')
 in_dir <- file.path(current_dir, 'input')
